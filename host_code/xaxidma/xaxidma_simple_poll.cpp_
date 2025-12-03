@@ -1,0 +1,279 @@
+/******************************************************************************
+* Copyright (C) 2010 - 2022 Xilinx, Inc.  All rights reserved.
+* Copyright (C) 2022 - 2023 Advanced Micro Devices, Inc.  All rights reserved.
+* SPDX-License-Identifier: MIT
+******************************************************************************/
+
+/*****************************************************************************/
+/**
+ *
+ * @file xaxidma_simple_poll.c
+ *
+ * This file demonstrates how to use the xaxidma driver on the Xilinx AXI
+ * DMA core (AXIDMA) to transfer packets in polling mode when the AXI DMA core
+ * is configured in simple mode.
+ *
+ * This code assumes a loopback hardware widget is connected to the AXI DMA
+ * core for data packet loopback.
+ *
+ * To see the debug print, you need a Uart16550 or uartlite in your system,
+ * and please set "-DDEBUG" in your compiler options. You need to rebuild your
+ * software executable.
+ *
+ *
+ * <pre>
+ * MODIFICATION HISTORY:
+ *
+ * Ver   Who  Date     Changes
+ * ----- ---- -------- -------------------------------------------------------
+ * 4.00a rkv  02/22/11 New example created for simple DMA, this example is for
+ *       	       simple DMA
+ * 5.00a srt  03/06/12 Added Flushing and Invalidation of Caches to fix CRs
+ *		       648103, 648701.
+ *		       Added V7 DDR Base Address to fix CR 649405.
+ * 6.00a srt  03/27/12 Changed API calls to support MCDMA driver.
+ * 7.00a srt  06/18/12 API calls are reverted back for backward compatibility.
+ * 7.01a srt  11/02/12 Buffer sizes (Tx and Rx) are modified to meet maximum
+ *		       DDR memory limit of the h/w system built with Area mode
+ * 7.02a srt  03/01/13 Updated DDR base address for IPI designs (CR 703656).
+ * 9.1   adk  01/07/16 Updated DDR base address for Ultrascale (CR 799532) and
+ *		       removed the defines for S6/V6.
+ * 9.3   ms   01/23/17 Modified xil_printf statement in main function to
+ *                     ensure that "Successfully ran" and "Failed" strings are
+ *                     available in all examples. This is a fix for CR-965028.
+ *       ms   04/05/17 Modified Comment lines in functions to
+ *                     recognize it as documentation block for doxygen
+ *                     generation of examples.
+ * 9.9   rsp  01/21/19 Fix use of #elif check in deriving DDR_BASE_ADDR.
+ * 9.10  rsp  09/17/19 Fix cache maintenance ops for source and dest buffer.
+ * 9.14  sk   03/08/22 Delete DDR memory limits comments as they are not
+ * 		       relevant to this driver version.
+ * 9.15  sa   08/12/22 Updated the example to use latest MIG cannoical define
+ * 		       i.e XPAR_MIG_0_C0_DDR4_MEMORY_MAP_BASEADDR.
+ * 9.16  sa   09/29/22 Fix infinite loops in the example.
+ * </pre>
+ *
+ * ***************************************************************************
+
+ */
+/***************************** Include Files *********************************/
+#include "xaxidma.h"
+#include "xparameters.h"
+#include "xdebug.h"
+#include <stdio.h>
+#include "xaxidma.h"
+#include "xil_types.h"
+#include "SingleLineMMDT.cpp"
+#include "xdma_config.h"
+
+/******************** Constant Definitions **********************************/
+
+/*
+ * Device hardware build related constants.
+ */
+
+#ifndef SDT
+// #define DMA_DEV_ID		XPAR_AXI_DMA_0_DEVICE_ID
+
+#ifdef XPAR_AXI_7SDDR_0_S_AXI_BASEADDR
+#define DDR_BASE_ADDR		XPAR_AXI_7SDDR_0_S_AXI_BASEADDR
+#elif defined (XPAR_MIG7SERIES_0_BASEADDR)
+#define DDR_BASE_ADDR	XPAR_MIG7SERIES_0_BASEADDR
+#elif defined (XPAR_MIG_0_C0_DDR4_MEMORY_MAP_BASEADDR)
+#define DDR_BASE_ADDR	XPAR_MIG_0_C0_DDR4_MEMORY_MAP_BASEADDR
+#elif defined (XPAR_PSU_DDR_0_S_AXI_BASEADDR)
+#define DDR_BASE_ADDR	XPAR_PSU_DDR_0_S_AXI_BASEADDR
+#endif
+
+#else
+
+#ifdef XPAR_MEM0_BASEADDRESS
+#define DDR_BASE_ADDR		XPAR_MEM0_BASEADDRESS
+#endif
+#endif
+
+#ifndef DDR_BASE_ADDR
+#warning CHECK FOR THE VALID DDR ADDRESS IN XPARAMETERS.H, \
+DEFAULT SET TO 0x01000000
+#define MEM_BASE_ADDR		0x80000000
+#else
+#define MEM_BASE_ADDR		(DDR_BASE_ADDR + 0x1000000)
+#endif
+
+#define TX_BUFFER_BASE		(MEM_BASE_ADDR + 0x00000000)
+#define RX_BUFFER_BASE		(MEM_BASE_ADDR + 0x20000000)
+#define RX_BUFFER_HIGH		(MEM_BASE_ADDR + 0x3FFFFFFF)
+
+// Total transfer length in Bytes
+#define MAX_PKT_LEN		4000
+
+#define TEST_START_VALUE	15
+
+#define NUMBER_OF_TRANSFERS	1
+#define POLL_TIMEOUT_COUNTER    1000000U
+#define ADDRESS_INCREMENT 4
+
+typedef uint32_t dataType;
+/**************************** Type Definitions *******************************/
+
+
+/***************** Macros (Inline Functions) Definitions *********************/
+
+
+/************************** Function Prototypes ******************************/
+int XAxiDma_Configuration(UINTPTR BaseAddress);
+int XAxiDma_SimplePoll(UINTPTR BaseAddress);
+
+/************************** Variable Definitions *****************************/
+/*
+ * Device instance definitions
+ */
+XAxiDma AxiDma;
+
+
+/*****************************************************************************/
+/**
+* The entry point for this simple transfer. It invokes data transfer through XDMA
+to the source address. Initiates axidma transfer and waits for the completion of the
+transfer. Once the transfer is done, it reads the data from the destination address.
+It invokes the example function,
+* and reports the execution status.
+*
+* @param	None.
+*
+* @return
+*		- XST_SUCCESS if task finishes successfully
+*		- XST_FAILURE if task fails.
+*
+* @note		None.
+*
+******************************************************************************/
+int main()
+{
+	int Status;
+	printf("\r\n--- Entering main() --- \r\n");
+	SingleLineMMDT singleLineMMDT;
+	// to print the values being written to/ read from memory
+	printData = true;
+	// to print the values being written to/ read from memory 
+	// while they are in the buffer. prints byte by byte
+	printBufferData = false;
+	// ParallelMMDT parallelMMDT;
+    const int32_t packet_length = MAX_PKT_LEN/sizeof(dataType);
+	int Index;
+	int Tries = NUMBER_OF_TRANSFERS;
+	u64 TxBufferPtr = TX_BUFFER_BASE;
+	u64 RxBufferPtr = RX_BUFFER_BASE;
+	int TimeOut = POLL_TIMEOUT_COUNTER;
+    std::vector<dataType> data;
+	for (int i = 0; i < packet_length; i++) {
+        data.push_back(i+1);
+    }
+	// Used for writing data to memory
+	int rc = singleLineMMDT.sendToFPGA(data, packet_length, TxBufferPtr, XDMA_DEVICE_NAME_WRITE);
+	if (rc < 0) {
+		std::cerr << "sendToFPGA failed ------------------------" << TxBufferPtr << std::endl;
+		return EXIT_FAILURE;
+	}
+
+	// Initial configuration for setting up axidma
+	Status = XAxiDma_Configuration(XPAR_AXI_DMA_0_BASEADDR);
+	if (Status != XST_SUCCESS) {
+		printf("XAxiDma_Configuration Failed\r\n");
+		return XST_FAILURE;
+	}
+
+	for (Index = 0; Index < Tries; Index ++) {
+
+		Status = XAxiDma_SimpleTransfer(&AxiDma, (UINTPTR) RxBufferPtr,
+						MAX_PKT_LEN, XAXIDMA_DEVICE_TO_DMA);
+
+		if (Status != XST_SUCCESS) {
+			printf("XAxiDma_SimpleTransfer Failed\r\n");
+			return XST_FAILURE;
+		}
+
+		Status = XAxiDma_SimpleTransfer(&AxiDma, (UINTPTR) TxBufferPtr,
+						MAX_PKT_LEN, XAXIDMA_DMA_TO_DEVICE);
+
+		if (Status != XST_SUCCESS) {
+			printf("XAxiDma_SimpleTransfer Failed\r\n");
+			return XST_FAILURE;
+		}
+
+		/*Wait till tranfer is done or 1usec * 10^6 iterations of timeout occurs*/
+		while (TimeOut) {
+			if (!(XAxiDma_Busy(&AxiDma, XAXIDMA_DEVICE_TO_DMA)) &&
+			    !(XAxiDma_Busy(&AxiDma, XAXIDMA_DMA_TO_DEVICE))) {
+				break;
+			}
+			TimeOut--;
+		}
+
+	}
+
+	// Used to read data from memory. 
+	// For our test case, we write to a (source address)memory, invoke axidma transfer, 
+	// and read from the (destination address)memory configured on axidma registers.
+	std::vector<dataType> outData;
+	int read_rc = singleLineMMDT.readFromFPGA(outData, packet_length, RxBufferPtr, XDMA_DEVICE_NAME_READ);
+	if (read_rc < 0) {
+		std::cerr << "readFromFPGA failed -----------------------" << RxBufferPtr << std::endl;;
+		return EXIT_FAILURE;
+	}
+
+	printf("--- Success: Exiting main() --- \r\n");
+
+	return XST_SUCCESS;
+
+}
+
+
+/*****************************************************************************/
+/**
+* The method to configure axidma for the simple transfer through polling.
+*
+* @param	BaseAddress is the address of the XAxiDma instance
+*
+* @return
+*		- XST_SUCCESS if example finishes successfully
+*		- XST_FAILURE if error occurs
+*
+* @note		None
+*
+*
+******************************************************************************/
+int XAxiDma_Configuration(UINTPTR BaseAddress)
+{
+	XAxiDma_Config *CfgPtr;
+	int Status;
+	printf("\r\n--- Entering XAxiDma_SimplePoll() --- \r\n");
+
+	/* Initialize the XAxiDma device.
+	 */
+	CfgPtr = XAxiDma_LookupConfigBaseAddr(BaseAddress);
+	if (!CfgPtr) {
+		printf("No config found for %ld\r\n", BaseAddress);
+		return XST_FAILURE;
+	}
+
+	Status = XAxiDma_CfgInitialize(&AxiDma, CfgPtr);
+	if (Status != XST_SUCCESS) {
+		printf("Initialization failed %d\r\n", Status);
+		return XST_FAILURE;
+	}
+
+	if (XAxiDma_HasSg(&AxiDma)) {
+		printf("Device configured as SG mode \r\n");
+		return XST_FAILURE;
+	}
+
+	/* Disable interrupts, we use polling mode
+	 */
+	XAxiDma_IntrDisable(&AxiDma, XAXIDMA_IRQ_ALL_MASK,
+			    XAXIDMA_DEVICE_TO_DMA);
+	XAxiDma_IntrDisable(&AxiDma, XAXIDMA_IRQ_ALL_MASK,
+			    XAXIDMA_DMA_TO_DEVICE);
+
+	return XST_SUCCESS;
+}
