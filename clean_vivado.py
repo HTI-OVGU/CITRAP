@@ -20,7 +20,7 @@ def clean_vivado_files(directory=None):
     
     deleted_files = []
     for item in directory.iterdir():
-        if item.is_file() and item.name.startswith("vivado"):
+        if item.is_file() and (item.name.startswith("vivado") or item.name.startswith("hs_err_pid")):
             try:
                 item.unlink()
                 deleted_files.append(item.name)
