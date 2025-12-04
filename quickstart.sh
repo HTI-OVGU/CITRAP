@@ -149,7 +149,9 @@ echo ""
 echo "=========================================="
 echo ""
 
-# Keep the environment activated
-echo "Virtual environment is now activated in this shell."
-echo "You can now run the project generator commands above."
-echo ""
+# Spawn a new shell with the virtual environment activated
+echo "=========================================="
+echo "Spawning new shell with virtual environment activated..."
+echo "Type 'exit' to return to your original shell."
+echo "=========================================="
+exec bash --rcfile <(echo "if [ -f ~/.bashrc ]; then source ~/.bashrc; fi; source ./virtualenv/bin/activate")
