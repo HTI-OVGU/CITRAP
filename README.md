@@ -1,3 +1,70 @@
+# CITRAP: A Rapid-Prototyping Infrastructure for FPGAs
+
+
+CITRAP is an open-source, lightweight, and fully configurable infrastructure template designed to streamline and accelerate the development of FPGA-based accelerators. It acts as a minimal “base design” for hardware prototyping, taking care of the essential interfaces:PCIe, DRAM controllers, DMA engines, AXI interconnects, and native debugging tools. So developers can focus entirely on their Unit Under Test (UUT) rather than rebuilding infrastructure for every project.
+
+Unlike heavy frameworks such as XRT, TAPASCo, or OpenCPI, CITRAP introduces no additional abstraction layers. Instead, it preserves full visibility into the hardware through native Vivado tools (ILA/VIO) and keeps the developer in direct control of the synthesis and debugging flow. The result is a significantly faster iteration cycle with complete access to internal signals, something that high-abstraction frameworks cannot offer.
+
+
+## Motivation
+
+Since FPGA prototyping has become increasingly complex when project requires PCIe connectivity, DRAM infrastructure, DMA paths, memory-mapped and streaming interfaces, and proper debugging. Building this infrastructure repeatedly consumes enormous time and slows down the research and development cycle.
+
+Furthermore, PCIe-based accelerators suffer from long reprogramming cycles: systems can require full host reboots to recover PCIe links after FPGA reconfiguration. Existing frameworks attempt to hide this complexity, but at the cost of limited signal visibility, slow build processes, restrictive runtime environments, and reduced control over low-level hardware behavior.
+
+CITRAP directly addresses these issues.
+
+It provides:
+
+- a static infrastructure partition that is synthesized once and never touched again,
+- a DFX-based reconfigurable user partition for rapid iteration,
+- native access to onboard debugging cores (ILA/VIO),
+- seamless PCIe operation without rescans or root privileges,
+- and a bare-metal workflow using standard Vivado tools.
+
+This combination enables a development experience that is both highly efficient and fully transparent.
+
+## Features
+
+CITRAP offers:
+- Support for full native Vivado debugging (ILA, VIO) inside the reconfigurable region
+- Static infrastructure synthesized once: PCIe XDMA, DRAM controller, AXI interconnect, MicroBlaze/ARM (optional)
+- Dynamic Function eXchange (DFX) with safe isolation between static and user logic partitions
+- Low overhead: ~4% LUT usage on Alveo U250 (~4× less than XRT shells)
+- C++ XDMA wrapper library for simple host–FPGA communication
+- AXI4-MM and AXI4-Stream support (via XDMA and AXI DMA)
+- GUI-based configuration script to generate board-specific static designs
+- Full control, no proprietary runtime, no hidden layers, no lost timing visibility
+
+CITRAP enables engineers to build FPGA accelerators with short iteration cycle while keeping full access to the underlying hardware. It is a good foundation for research, prototyping, teaching, and any scenario requiring fast, repeatable, and transparent FPGA development.
+
+## Getting Started
+
+To create a new Vivado project using the CITRAP generator (GUI or CLI), please refer to the detailed documentation in the **Host Code** folder:
+
+
+[**Go to Project Generator & Host Code Documentation**](host_code/README.md)
+
+### Quick Summary
+
+1. **Setup Environment**:
+
+   ```bash
+   ./quickstart.sh
+   ```
+
+2. **Run Project Generator**:
+
+   ```bash
+   # GUI Version
+   ./run_gui.sh
+
+
+   # CLI Version
+   ./run_cli.sh
+   ```
+
+For detailed instructions on prerequisites, configuration, and using the generated host code, see [host_code/README.md](host_code/README.md).
 # CITRAP Project Generator
 
 Interactive tools to create Vivado projects for different FPGA boards.
@@ -262,4 +329,20 @@ source virtualenv/bin/activate
 
 ### System Packages
 - python3-tk (tkinter)
-- Vivado 2024.2 or compatible version
+- Vivado 2024.2
+
+# Citation
+
+If you use CITRAP, please cite us:
+
+```bibtex
+@inproceedings{citrap,
+    author = {Vitalii Burtsev, Martin Wilhelm, Nandhish Thathanur Rajappa, Ilia Sozutov, Thilo Pionteck},
+    title = {CITRAP: A Configurable Infrastructure Template for Rapid Prototyping on FPGAs},
+    booktitle = { },
+    year = {},
+    pages = {},
+    url = {},
+    publisher = {}
+}
+```
