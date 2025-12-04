@@ -130,16 +130,18 @@ set bCheckIPsPassed 1
 set bCheckIPs 1
 if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
-xilinx.com:ip:axi_gpio:2.0\
-xilinx.com:ip:clk_wiz:6.0\
 xilinx.com:ip:smartconnect:1.0\
+xilinx.com:ip:axi_gpio:2.0\
 xilinx.com:ip:dfx_axi_shutdown_manager:1.0\
 xilinx.com:ip:xlconcat:2.1\
 xilinx.com:ip:util_vector_logic:2.0\
 xilinx.com:ip:system_ila:1.1\
-xilinx.com:ip:xdma:4.1\
-xilinx.com:ip:mig_7series:4.2\
+xilinx.com:ip:axi_dwidth_converter:2.1\
+xilinx.com:ip:axi_clock_converter:2.1\
 xilinx.com:ip:proc_sys_reset:5.0\
+xilinx.com:ip:clk_wiz:6.0\
+xilinx.com:ip:mig_7series:4.2\
+xilinx.com:ip:xdma:4.1\
 xilinx.com:ip:xlconstant:1.1\
 "
 
@@ -481,95 +483,6 @@ proc create_hier_cell_pcie_conf { parentCell nameHier } {
   current_bd_instance $oldCurInst
 }
 
-# Hierarchical cell: DRAM
-proc create_hier_cell_DRAM { parentCell nameHier } {
-
-  variable script_folder
-
-  if { $parentCell eq "" || $nameHier eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_DRAM() - Empty argument(s)!"}
-     return
-  }
-
-  # Get object for parentCell
-  set parentObj [get_bd_cells $parentCell]
-  if { $parentObj == "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2090 -severity "ERROR" "Unable to find parent cell <$parentCell>!"}
-     return
-  }
-
-  # Make sure parentObj is hier blk
-  set parentType [get_property TYPE $parentObj]
-  if { $parentType ne "hier" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2091 -severity "ERROR" "Parent <$parentObj> has TYPE = <$parentType>. Expected to be <hier>."}
-     return
-  }
-
-  # Save current instance; Restore later
-  set oldCurInst [current_bd_instance .]
-
-  # Set parent object as current
-  current_bd_instance $parentObj
-
-  # Create cell and set as current instance
-  set hier_obj [create_bd_cell -type hier $nameHier]
-  current_bd_instance $hier_obj
-
-  # Create interface pins
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:ddrx_rtl:1.0 ddr3_sdram
-
-  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 S_AXI
-
-
-  # Create pins
-  create_bd_pin -dir I -type rst sys_rst_n
-  create_bd_pin -dir O -type clk slowest_sync_clk
-  create_bd_pin -dir I -type clk sys_clk_i
-  create_bd_pin -dir I -type rst aux_reset_in
-
-  # Create instance: mig_7series_0, and set properties
-  set mig_7series_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:mig_7series:4.2 mig_7series_0 ]
-
-  # Generate the PRJ File for MIG
-  set str_mig_folder [get_property IP_DIR [ get_ips [ get_property CONFIG.Component_Name $mig_7series_0 ] ] ]
-  set str_mig_file_name mig_b.prj
-  set str_mig_file_path ${str_mig_folder}/${str_mig_file_name}
-  write_mig_file_static_design_mig_7series_0_0 $str_mig_file_path
-
-  set_property -dict [list \
-    CONFIG.BOARD_MIG_PARAM {ddr3_sdram} \
-    CONFIG.MIG_DONT_TOUCH_PARAM {Custom} \
-    CONFIG.RESET_BOARD_INTERFACE {Custom} \
-    CONFIG.XML_INPUT_FILE {mig_b.prj} \
-  ] $mig_7series_0
-
-
-  # Create instance: proc_sys_reset_0, and set properties
-  set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
-
-  # Create interface connections
-  connect_bd_intf_net -intf_net mig_7series_0_DDR3 [get_bd_intf_pins ddr3_sdram] [get_bd_intf_pins mig_7series_0/DDR3]
-  connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_pins S_AXI] [get_bd_intf_pins mig_7series_0/S_AXI]
-
-  # Create port connections
-  connect_bd_net -net clk_wiz_0_clk_out1  [get_bd_pins sys_clk_i] \
-  [get_bd_pins mig_7series_0/sys_clk_i]
-  connect_bd_net -net mig_7series_0_ui_clk  [get_bd_pins mig_7series_0/ui_clk] \
-  [get_bd_pins slowest_sync_clk] \
-  [get_bd_pins proc_sys_reset_0/slowest_sync_clk]
-  connect_bd_net -net mig_7series_0_ui_clk_sync_rst  [get_bd_pins mig_7series_0/ui_clk_sync_rst] \
-  [get_bd_pins proc_sys_reset_0/ext_reset_in]
-  connect_bd_net -net rst_mig_7series_0_200M_peripheral_aresetn  [get_bd_pins proc_sys_reset_0/peripheral_aresetn] \
-  [get_bd_pins mig_7series_0/aresetn]
-  connect_bd_net -net sys_rst_n_1  [get_bd_pins sys_rst_n] \
-  [get_bd_pins mig_7series_0/sys_rst]
-  connect_bd_net -net xilinx_dma_pcie_ep_0_user_resetn  [get_bd_pins aux_reset_in] \
-  [get_bd_pins proc_sys_reset_0/aux_reset_in]
-
-  # Restore current instance
-  current_bd_instance $oldCurInst
-}
-
 # Hierarchical cell: PCIe
 proc create_hier_cell_PCIe { parentCell nameHier } {
 
@@ -662,6 +575,124 @@ proc create_hier_cell_PCIe { parentCell nameHier } {
   [get_bd_pins pcie_axi_aresetn]
   connect_bd_net -net xlconstant_2_dout  [get_bd_pins pcie_conf/rev_id] \
   [get_bd_pins xdma_0/cfg_rev_id_pf0]
+
+  # Restore current instance
+  current_bd_instance $oldCurInst
+}
+
+# Hierarchical cell: DRAM
+proc create_hier_cell_DRAM { parentCell nameHier } {
+
+  variable script_folder
+
+  if { $parentCell eq "" || $nameHier eq "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_DRAM() - Empty argument(s)!"}
+     return
+  }
+
+  # Get object for parentCell
+  set parentObj [get_bd_cells $parentCell]
+  if { $parentObj == "" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2090 -severity "ERROR" "Unable to find parent cell <$parentCell>!"}
+     return
+  }
+
+  # Make sure parentObj is hier blk
+  set parentType [get_property TYPE $parentObj]
+  if { $parentType ne "hier" } {
+     catch {common::send_gid_msg -ssname BD::TCL -id 2091 -severity "ERROR" "Parent <$parentObj> has TYPE = <$parentType>. Expected to be <hier>."}
+     return
+  }
+
+  # Save current instance; Restore later
+  set oldCurInst [current_bd_instance .]
+
+  # Set parent object as current
+  current_bd_instance $parentObj
+
+  # Create cell and set as current instance
+  set hier_obj [create_bd_cell -type hier $nameHier]
+  current_bd_instance $hier_obj
+
+  # Create interface pins
+  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:aximm_rtl:1.0 S_AXI
+
+  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:ddrx_rtl:1.0 ddr3_sdram
+
+
+  # Create pins
+  create_bd_pin -dir I -type clk mstatic_axi_clk_0
+  create_bd_pin -dir I -type rst s_axi_aresetn
+  create_bd_pin -dir I -type rst aux_reset_in
+  create_bd_pin -dir I -type clk sys_clk
+  create_bd_pin -dir I -type rst sys_rst_n
+
+  # Create instance: axi_dwidth_converter_0, and set properties
+  set axi_dwidth_converter_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_dwidth_converter:2.1 axi_dwidth_converter_0 ]
+  set_property CONFIG.SI_DATA_WIDTH {32} $axi_dwidth_converter_0
+
+
+  # Create instance: axi_clock_converter_0, and set properties
+  set axi_clock_converter_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_clock_converter:2.1 axi_clock_converter_0 ]
+
+  # Create instance: proc_sys_reset_0, and set properties
+  set proc_sys_reset_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 proc_sys_reset_0 ]
+
+  # Create instance: clk_wiz_0, and set properties
+  set clk_wiz_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 clk_wiz_0 ]
+  set_property -dict [list \
+    CONFIG.PRIM_SOURCE {No_buffer} \
+    CONFIG.USE_LOCKED {false} \
+    CONFIG.USE_RESET {false} \
+  ] $clk_wiz_0
+
+
+  # Create instance: mig_7series_0, and set properties
+  set mig_7series_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:mig_7series:4.2 mig_7series_0 ]
+
+  # Generate the PRJ File for MIG
+  set str_mig_folder [get_property IP_DIR [ get_ips [ get_property CONFIG.Component_Name $mig_7series_0 ] ] ]
+  set str_mig_file_name mig_b.prj
+  set str_mig_file_path ${str_mig_folder}/${str_mig_file_name}
+  write_mig_file_static_design_mig_7series_0_0 $str_mig_file_path
+
+  set_property -dict [list \
+    CONFIG.BOARD_MIG_PARAM {ddr3_sdram} \
+    CONFIG.MIG_DONT_TOUCH_PARAM {Custom} \
+    CONFIG.RESET_BOARD_INTERFACE {Custom} \
+    CONFIG.XML_INPUT_FILE {mig_b.prj} \
+  ] $mig_7series_0
+
+
+  # Create interface connections
+  connect_bd_intf_net -intf_net axi_clock_converter_0_M_AXI [get_bd_intf_pins axi_clock_converter_0/M_AXI] [get_bd_intf_pins axi_dwidth_converter_0/S_AXI]
+  connect_bd_intf_net -intf_net axi_dwidth_converter_0_M_AXI [get_bd_intf_pins axi_dwidth_converter_0/M_AXI] [get_bd_intf_pins mig_7series_0/S_AXI]
+  connect_bd_intf_net -intf_net axi_smc_M02_AXI [get_bd_intf_pins S_AXI] [get_bd_intf_pins axi_clock_converter_0/S_AXI]
+  connect_bd_intf_net -intf_net mig_7series_0_DDR3 [get_bd_intf_pins ddr3_sdram] [get_bd_intf_pins mig_7series_0/DDR3]
+
+  # Create port connections
+  connect_bd_net -net clk_wiz_0_clk_out1  [get_bd_pins clk_wiz_0/clk_out1] \
+  [get_bd_pins mig_7series_0/sys_clk_i]
+  connect_bd_net -net mig_7series_0_ui_clk  [get_bd_pins mig_7series_0/ui_clk] \
+  [get_bd_pins proc_sys_reset_0/slowest_sync_clk] \
+  [get_bd_pins axi_dwidth_converter_0/s_axi_aclk] \
+  [get_bd_pins axi_clock_converter_0/m_axi_aclk]
+  connect_bd_net -net mig_7series_0_ui_clk_sync_rst  [get_bd_pins mig_7series_0/ui_clk_sync_rst] \
+  [get_bd_pins proc_sys_reset_0/ext_reset_in]
+  connect_bd_net -net rst_mig_7series_0_200M_peripheral_aresetn  [get_bd_pins proc_sys_reset_0/peripheral_aresetn] \
+  [get_bd_pins mig_7series_0/aresetn] \
+  [get_bd_pins axi_dwidth_converter_0/s_axi_aresetn] \
+  [get_bd_pins axi_clock_converter_0/m_axi_aresetn]
+  connect_bd_net -net rst_ps7_0_50M_peripheral_aresetn  [get_bd_pins s_axi_aresetn] \
+  [get_bd_pins axi_clock_converter_0/s_axi_aresetn]
+  connect_bd_net -net sys_clk_2  [get_bd_pins sys_clk] \
+  [get_bd_pins clk_wiz_0/clk_in1]
+  connect_bd_net -net sys_rst_n_1  [get_bd_pins sys_rst_n] \
+  [get_bd_pins mig_7series_0/sys_rst]
+  connect_bd_net -net xilinx_dma_pcie_ep_0_user_clk  [get_bd_pins mstatic_axi_clk_0] \
+  [get_bd_pins axi_clock_converter_0/s_axi_aclk]
+  connect_bd_net -net xilinx_dma_pcie_ep_0_user_resetn  [get_bd_pins aux_reset_in] \
+  [get_bd_pins proc_sys_reset_0/aux_reset_in]
 
   # Restore current instance
   current_bd_instance $oldCurInst
@@ -943,6 +974,15 @@ proc create_root_design { parentCell } {
  ] $mstatic_axi_clk_0
   set mstatic_aresetn_0 [ create_bd_port -dir O -from 0 -to 0 -type rst mstatic_aresetn_0 ]
 
+  # Create instance: axi_smc, and set properties
+  set axi_smc [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 axi_smc ]
+  set_property -dict [list \
+    CONFIG.NUM_CLKS {1} \
+    CONFIG.NUM_MI {3} \
+    CONFIG.NUM_SI {2} \
+  ] $axi_smc
+
+
   # Create instance: DFX_logic
   create_hier_cell_DFX_logic [current_bd_instance .] DFX_logic
 
@@ -954,64 +994,45 @@ proc create_root_design { parentCell } {
   ] $axi_gpio_leds
 
 
-  # Create instance: PCIe
-  create_hier_cell_PCIe [current_bd_instance .] PCIe
-
-  # Create instance: clk_wiz_0, and set properties
-  set clk_wiz_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:clk_wiz:6.0 clk_wiz_0 ]
-  set_property -dict [list \
-    CONFIG.PRIM_SOURCE {No_buffer} \
-    CONFIG.USE_LOCKED {false} \
-    CONFIG.USE_RESET {false} \
-  ] $clk_wiz_0
-
-
-  # Create instance: smartconnect_0, and set properties
-  set smartconnect_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 smartconnect_0 ]
-  set_property -dict [list \
-    CONFIG.NUM_CLKS {2} \
-    CONFIG.NUM_MI {3} \
-  ] $smartconnect_0
-
-
   # Create instance: DRAM
   create_hier_cell_DRAM [current_bd_instance .] DRAM
 
+  # Create instance: PCIe
+  create_hier_cell_PCIe [current_bd_instance .] PCIe
+
   # Create interface connections
   connect_bd_intf_net -intf_net DFX_logic_M00_AXI [get_bd_intf_pins axi_gpio_leds/S_AXI] [get_bd_intf_pins DFX_logic/M00_AXI]
-  connect_bd_intf_net -intf_net DFX_logic_s_static_from_sdman [get_bd_intf_pins smartconnect_0/S01_AXI] [get_bd_intf_pins DFX_logic/s_static_from_sdman]
-  connect_bd_intf_net -intf_net PCIe_M_AXI [get_bd_intf_pins smartconnect_0/S00_AXI] [get_bd_intf_pins PCIe/M_AXI]
+  connect_bd_intf_net -intf_net DFX_logic_s_static_from_sdman [get_bd_intf_pins DFX_logic/s_static_from_sdman] [get_bd_intf_pins axi_smc/S01_AXI]
   connect_bd_intf_net -intf_net S00_AXI_0_1 [get_bd_intf_ports sstatic_axi_0] [get_bd_intf_pins DFX_logic/s_static_to_sdman]
   connect_bd_intf_net -intf_net axi_gpio_0_GPIO [get_bd_intf_ports led_4bits] [get_bd_intf_pins axi_gpio_leds/GPIO]
+  connect_bd_intf_net -intf_net axi_smc_M00_AXI [get_bd_intf_pins axi_smc/M00_AXI] [get_bd_intf_pins DFX_logic/m_static_to_sdman]
+  connect_bd_intf_net -intf_net axi_smc_M01_AXI [get_bd_intf_pins axi_smc/M01_AXI] [get_bd_intf_pins DFX_logic/S00_AXI]
+  connect_bd_intf_net -intf_net axi_smc_M02_AXI [get_bd_intf_pins DRAM/S_AXI] [get_bd_intf_pins axi_smc/M02_AXI]
   connect_bd_intf_net -intf_net dfx_axi_shutdown_man_1_M_AXI [get_bd_intf_ports mstatic_axi_0] [get_bd_intf_pins DFX_logic/m_static_from_sdman]
   connect_bd_intf_net -intf_net mig_7series_0_DDR3 [get_bd_intf_ports ddr3_sdram] [get_bd_intf_pins DRAM/ddr3_sdram]
-  connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_pins DRAM/S_AXI] [get_bd_intf_pins smartconnect_0/M00_AXI]
-  connect_bd_intf_net -intf_net smartconnect_0_M01_AXI [get_bd_intf_pins smartconnect_0/M01_AXI] [get_bd_intf_pins DFX_logic/S00_AXI]
-  connect_bd_intf_net -intf_net smartconnect_0_M02_AXI [get_bd_intf_pins smartconnect_0/M02_AXI] [get_bd_intf_pins DFX_logic/m_static_to_sdman]
+  connect_bd_intf_net -intf_net xdma_0_M_AXI [get_bd_intf_pins PCIe/M_AXI] [get_bd_intf_pins axi_smc/S00_AXI]
   connect_bd_intf_net -intf_net xdma_0_pcie_mgt [get_bd_intf_ports pci_exp] [get_bd_intf_pins PCIe/pci_exp]
 
   # Create port connections
-  connect_bd_net -net clk_wiz_0_clk_out1  [get_bd_pins clk_wiz_0/clk_out1] \
-  [get_bd_pins DRAM/sys_clk_i]
-  connect_bd_net -net mig_7series_0_ui_clk  [get_bd_pins DRAM/slowest_sync_clk] \
-  [get_bd_pins smartconnect_0/aclk1]
   connect_bd_net -net sys_clk_2  [get_bd_ports sys_clk] \
-  [get_bd_pins PCIe/sys_clk] \
-  [get_bd_pins clk_wiz_0/clk_in1]
+  [get_bd_pins DRAM/sys_clk] \
+  [get_bd_pins PCIe/sys_clk]
   connect_bd_net -net sys_rst_n_1  [get_bd_ports sys_rst_n] \
   [get_bd_pins DRAM/sys_rst_n]
   connect_bd_net -net util_vector_logic_0_Res  [get_bd_pins DFX_logic/mstatic_aresetn_0] \
   [get_bd_ports mstatic_aresetn_0]
   connect_bd_net -net xilinx_dma_pcie_ep_0_user_clk  [get_bd_pins PCIe/pcie_axi_clk] \
   [get_bd_ports mstatic_axi_clk_0] \
+  [get_bd_pins axi_smc/aclk] \
   [get_bd_pins DFX_logic/axi_clk] \
   [get_bd_pins axi_gpio_leds/s_axi_aclk] \
-  [get_bd_pins smartconnect_0/aclk]
+  [get_bd_pins DRAM/mstatic_axi_clk_0]
   connect_bd_net -net xilinx_dma_pcie_ep_0_user_resetn  [get_bd_pins PCIe/pcie_axi_aresetn] \
+  [get_bd_pins DRAM/aux_reset_in] \
+  [get_bd_pins axi_smc/aresetn] \
   [get_bd_pins axi_gpio_leds/s_axi_aresetn] \
   [get_bd_pins DFX_logic/resetn] \
-  [get_bd_pins smartconnect_0/aresetn] \
-  [get_bd_pins DRAM/aux_reset_in]
+  [get_bd_pins DRAM/s_axi_aresetn]
 
   # Create address segments
   assign_bd_address -offset 0x80010000 -range 0x00010000 -with_name SEG_axi_gpio_0_Reg -target_address_space [get_bd_addr_spaces PCIe/xdma_0/M_AXI] [get_bd_addr_segs axi_gpio_leds/S_AXI/Reg] -force
