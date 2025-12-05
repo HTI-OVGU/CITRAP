@@ -13,6 +13,7 @@ import shutil
 import re
 from pathlib import Path
 from ttkbootstrap import Style
+from PIL import Image, ImageTk
 
 class CITRAPProjectGUI:
     def __init__(self, root):
@@ -86,10 +87,24 @@ class CITRAPProjectGUI:
         
         row = 0
         
-        # Title
+        # Logo
+        logo_path = self.script_dir / "HTI_Logo.png"
+        if logo_path.exists():
+            try:
+                logo_image = Image.open(logo_path)
+                # Resize logo if needed (adjust size as desired)
+                logo_image = logo_image.resize((300, int(300 * logo_image.height / logo_image.width)), Image.Resampling.LANCZOS)
+                self.logo_photo = ImageTk.PhotoImage(logo_image)
+                logo_label = ttk.Label(self.root, image=self.logo_photo)
+                logo_label.grid(row=row, column=0, columnspan=3, pady=(20, 10))
+                row += 1
+            except Exception as e:
+                print(f"Warning: Could not load logo: {e}")
+        
+        # Title - centered
         title_label = ttk.Label(self.root, text="CITRAP Project Generator", 
-                               font=("Arial", 16, "bold"))
-        title_label.grid(row=row, column=0, columnspan=3, pady=20, sticky="ew")
+                               font=("Arial", 16, "bold"), anchor="center")
+        title_label.grid(row=row, column=0, columnspan=3, pady=(0, 20), sticky="ew")
         row += 1
         
         # Vivado Settings Path

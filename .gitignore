@@ -1,0 +1,33 @@
+# Python virtual environment
+virtualenv/
+venv/
+env/
+
+# Generated project directories
+citrap/
+citrap_tmp/
+
+# Vivado generated files and logs
+vivado*.log
+vivado*.jou
+vivado_pid*.str
+vivado_pid*.debug
+hs_err_pid*.log
+.Xil/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

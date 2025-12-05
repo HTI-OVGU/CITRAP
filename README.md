@@ -329,7 +329,7 @@ source virtualenv/bin/activate
 
 ### System Packages
 - python3-tk (tkinter)
-- Vivado 2024.2
+- Vivado 2024.1 or 2024.2
 
 # Citation
 
