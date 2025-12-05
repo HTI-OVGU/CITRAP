@@ -19,6 +19,10 @@
 #include <cstdio>
 #include <getopt.h>
 
+/**
+ * @brief Print usage information and command-line options
+ * @param prog_name Program name from argv[0]
+ */
 void print_usage(const char* prog_name) {
     printf("Usage: %s [OPTIONS]\n", prog_name);
     printf("FPGA device control and test utility\n\n");
@@ -47,11 +51,25 @@ void print_usage(const char* prog_name) {
     printf("  %s --send-dma           Send DMA test vector\n", prog_name);
 }
 
+/**
+ * @brief Print version information
+ */
 void print_version() {
     printf("FPGA Device Control Utility v1.0\n");
     printf("Built on %s %s\n", __DATE__, __TIME__);
 }
 
+/**
+ * @brief Parse command-line arguments and execute corresponding FPGA operations
+ * 
+ * This function processes all command-line options and executes the requested
+ * FPGA operations such as programming, PCIe rescanning, GPIO/BRAM/DDR access,
+ * DMA transfers, and module execution.
+ * 
+ * @param argc Argument count from main()
+ * @param argv Argument vector from main()
+ * @return XST_SUCCESS on success, XST_FAILURE on invalid arguments or errors
+ */
 int parse_and_execute(int argc, char* argv[]) {
     int opt;
     int option_index = 0;

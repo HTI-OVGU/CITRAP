@@ -1,3 +1,8 @@
+/**
+ * @file AxiDmaUtils.cpp
+ * @brief Implementation of AXI DMA utility functions
+ */
+
 #include "AxiDmaUtils.h"
 #include "xaxidma.h"
 #include <cstdio>
@@ -19,11 +24,20 @@ int Configure(XAxiDma* instance, UINTPTR baseAddress) {
         std::printf("AxiDma: Device configured in SG mode (expected simple)\n");
         return XST_FAILURE;
     }
+    // Disable interrupts for polling mode
     XAxiDma_IntrDisable(instance, XAXIDMA_IRQ_ALL_MASK, XAXIDMA_DEVICE_TO_DMA);
     XAxiDma_IntrDisable(instance, XAXIDMA_IRQ_ALL_MASK, XAXIDMA_DMA_TO_DEVICE);
     return XST_SUCCESS;
 }
 
+/**
+ * @brief Internal helper function to poll for DMA transfer completion
+ * 
+ * @param instance Pointer to XAxiDma instance
+ * @param dir Transfer direction (XAXIDMA_DMA_TO_DEVICE or XAXIDMA_DEVICE_TO_DMA)
+ * @param timeoutIters Maximum polling iterations
+ * @return XST_SUCCESS if transfer completed, XST_FAILURE on timeout
+ */
 static int waitFor(XAxiDma* instance, int dir, int timeoutIters) {
     while (timeoutIters--) {
         if (!XAxiDma_Busy(instance, dir)) return XST_SUCCESS;
