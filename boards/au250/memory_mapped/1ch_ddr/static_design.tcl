@@ -18,23 +18,7 @@ variable script_folder
 set script_folder [_tcl::get_script_folder]
 
 ################################################################
-# Check if script is running in correct Vivado version.
-################################################################
-set scripts_vivado_version 2024.2
-set current_vivado_version [version -short]
 
-if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
-   puts ""
-   if { [string compare $scripts_vivado_version $current_vivado_version] > 0 } {
-      catch {common::send_gid_msg -ssname BD::TCL -id 2042 -severity "ERROR" " This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Sourcing the script failed since it was created with a future version of Vivado."}
-
-   } else {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2041 -severity "ERROR" "This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Please run the script in Vivado <$scripts_vivado_version> then open the design in Vivado <$current_vivado_version>. Upgrade the design by running \"Tools => Report => Report IP Status...\", then run write_bd_tcl to create an updated script."}
-
-   }
-
-   return 1
-}
 
 ################################################################
 # START
@@ -130,7 +114,9 @@ set bCheckIPsPassed 1
 set bCheckIPs 1
 if { $bCheckIPs == 1 } {
    set list_check_ips "\ 
+xilinx.com:ip:xdma:4.1\
 xilinx.com:ip:smartconnect:1.0\
+xilinx.com:ip:util_ds_buf:2.2\
 xilinx.com:ip:proc_sys_reset:5.0\
 xilinx.com:ip:ddr4:2.2\
 xilinx.com:ip:dfx_axi_shutdown_manager:1.0\
@@ -138,9 +124,6 @@ xilinx.com:ip:xlconcat:2.1\
 xilinx.com:ip:util_vector_logic:2.0\
 xilinx.com:ip:system_ila:1.1\
 xilinx.com:ip:axi_gpio:2.0\
-xilinx.com:ip:util_ds_buf:2.2\
-xilinx.com:ip:xdma:4.1\
-xilinx.com:ip:xlconstant:1.1\
 "
 
    set list_ips_missing ""
@@ -169,199 +152,6 @@ if { $bCheckIPsPassed != 1 } {
 # DESIGN PROCs
 ##################################################################
 
-
-# Hierarchical cell: pcie_conf
-proc create_hier_cell_pcie_conf { parentCell nameHier } {
-
-  variable script_folder
-
-  if { $parentCell eq "" || $nameHier eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_pcie_conf() - Empty argument(s)!"}
-     return
-  }
-
-  # Get object for parentCell
-  set parentObj [get_bd_cells $parentCell]
-  if { $parentObj == "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2090 -severity "ERROR" "Unable to find parent cell <$parentCell>!"}
-     return
-  }
-
-  # Make sure parentObj is hier blk
-  set parentType [get_property TYPE $parentObj]
-  if { $parentType ne "hier" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2091 -severity "ERROR" "Parent <$parentObj> has TYPE = <$parentType>. Expected to be <hier>."}
-     return
-  }
-
-  # Save current instance; Restore later
-  set oldCurInst [current_bd_instance .]
-
-  # Set parent object as current
-  current_bd_instance $parentObj
-
-  # Create cell and set as current instance
-  set hier_obj [create_bd_cell -type hier $nameHier]
-  current_bd_instance $hier_obj
-
-  # Create interface pins
-
-  # Create pins
-  create_bd_pin -dir O -from 15 -to 0 vend_id_subsys_vend_id
-  create_bd_pin -dir O -from 15 -to 0 dev_id
-  create_bd_pin -dir O -from 7 -to 0 rev_id
-  create_bd_pin -dir O -from 15 -to 0 subsys_id
-
-  # Create instance: X10EE, and set properties
-  set X10EE [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 X10EE ]
-  set_property -dict [list \
-    CONFIG.CONST_VAL {4334} \
-    CONFIG.CONST_WIDTH {16} \
-  ] $X10EE
-
-
-  # Create instance: X9032, and set properties
-  set X9032 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 X9032 ]
-  set_property -dict [list \
-    CONFIG.CONST_VAL {36914} \
-    CONFIG.CONST_WIDTH {16} \
-  ] $X9032
-
-
-  # Create instance: X0, and set properties
-  set X0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 X0 ]
-  set_property -dict [list \
-    CONFIG.CONST_VAL {0} \
-    CONFIG.CONST_WIDTH {8} \
-  ] $X0
-
-
-  # Create instance: X0007, and set properties
-  set X0007 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xlconstant:1.1 X0007 ]
-  set_property -dict [list \
-    CONFIG.CONST_VAL {7} \
-    CONFIG.CONST_WIDTH {16} \
-  ] $X0007
-
-
-  # Create port connections
-  connect_bd_net -net X0007_dout  [get_bd_pins X0007/dout] \
-  [get_bd_pins subsys_id]
-  connect_bd_net -net X10EE_dout  [get_bd_pins X10EE/dout] \
-  [get_bd_pins vend_id_subsys_vend_id]
-  connect_bd_net -net X9022_dout  [get_bd_pins X9032/dout] \
-  [get_bd_pins dev_id]
-  connect_bd_net -net xlconstant_2_dout  [get_bd_pins X0/dout] \
-  [get_bd_pins rev_id]
-
-  # Restore current instance
-  current_bd_instance $oldCurInst
-}
-
-# Hierarchical cell: PCIe
-proc create_hier_cell_PCIe { parentCell nameHier } {
-
-  variable script_folder
-
-  if { $parentCell eq "" || $nameHier eq "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2092 -severity "ERROR" "create_hier_cell_PCIe() - Empty argument(s)!"}
-     return
-  }
-
-  # Get object for parentCell
-  set parentObj [get_bd_cells $parentCell]
-  if { $parentObj == "" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2090 -severity "ERROR" "Unable to find parent cell <$parentCell>!"}
-     return
-  }
-
-  # Make sure parentObj is hier blk
-  set parentType [get_property TYPE $parentObj]
-  if { $parentType ne "hier" } {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2091 -severity "ERROR" "Parent <$parentObj> has TYPE = <$parentType>. Expected to be <hier>."}
-     return
-  }
-
-  # Save current instance; Restore later
-  set oldCurInst [current_bd_instance .]
-
-  # Set parent object as current
-  current_bd_instance $parentObj
-
-  # Create cell and set as current instance
-  set hier_obj [create_bd_cell -type hier $nameHier]
-  current_bd_instance $hier_obj
-
-  # Create interface pins
-  create_bd_intf_pin -mode Slave -vlnv xilinx.com:interface:diff_clock_rtl:1.0 pcie_refclk
-
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:aximm_rtl:1.0 M_AXI
-
-  create_bd_intf_pin -mode Master -vlnv xilinx.com:interface:pcie_7x_mgt_rtl:1.0 pci_express_x16
-
-
-  # Create pins
-  create_bd_pin -dir I -type rst pcie_perstn
-  create_bd_pin -dir O -type clk axi_clk
-  create_bd_pin -dir O -type rst axi_aresetn
-
-  # Create instance: util_ds_buf, and set properties
-  set util_ds_buf [ create_bd_cell -type ip -vlnv xilinx.com:ip:util_ds_buf:2.2 util_ds_buf ]
-  set_property -dict [list \
-    CONFIG.DIFF_CLK_IN_BOARD_INTERFACE {pcie_refclk} \
-    CONFIG.USE_BOARD_FLOW {true} \
-  ] $util_ds_buf
-
-
-  # Create instance: xdma_0, and set properties
-  set xdma_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xdma:4.1 xdma_0 ]
-  set_property -dict [list \
-    CONFIG.PCIE_BOARD_INTERFACE {pci_express_x16} \
-    CONFIG.SYS_RST_N_BOARD_INTERFACE {pcie_perstn} \
-    CONFIG.axilite_master_en {false} \
-    CONFIG.cfg_mgmt_if {false} \
-    CONFIG.pcie_id_if {true} \
-    CONFIG.pf0_device_id {9032} \
-    CONFIG.xdma_axi_intf_mm {AXI_Memory_Mapped} \
-    CONFIG.xdma_pcie_64bit_en {true} \
-    CONFIG.xdma_pcie_prefetchable {true} \
-    CONFIG.xdma_rnum_chnl {4} \
-    CONFIG.xdma_wnum_chnl {4} \
-  ] $xdma_0
-
-
-  # Create instance: pcie_conf
-  create_hier_cell_pcie_conf $hier_obj pcie_conf
-
-  # Create interface connections
-  connect_bd_intf_net -intf_net pcie_refclk_1 [get_bd_intf_pins pcie_refclk] [get_bd_intf_pins util_ds_buf/CLK_IN_D]
-  connect_bd_intf_net -intf_net xdma_0_M_AXI [get_bd_intf_pins M_AXI] [get_bd_intf_pins xdma_0/M_AXI]
-  connect_bd_intf_net -intf_net xdma_0_pcie_mgt [get_bd_intf_pins pci_express_x16] [get_bd_intf_pins xdma_0/pcie_mgt]
-
-  # Create port connections
-  connect_bd_net -net pcie_conf_dev_id  [get_bd_pins pcie_conf/dev_id] \
-  [get_bd_pins xdma_0/cfg_dev_id_pf0]
-  connect_bd_net -net pcie_conf_rev_id  [get_bd_pins pcie_conf/rev_id] \
-  [get_bd_pins xdma_0/cfg_rev_id_pf0]
-  connect_bd_net -net pcie_conf_subsys_id  [get_bd_pins pcie_conf/subsys_id] \
-  [get_bd_pins xdma_0/cfg_subsys_id_pf0]
-  connect_bd_net -net pcie_conf_vend_id_subsys_vend_id  [get_bd_pins pcie_conf/vend_id_subsys_vend_id] \
-  [get_bd_pins xdma_0/cfg_subsys_vend_id] \
-  [get_bd_pins xdma_0/cfg_vend_id]
-  connect_bd_net -net pcie_perstn_1  [get_bd_pins pcie_perstn] \
-  [get_bd_pins xdma_0/sys_rst_n]
-  connect_bd_net -net util_ds_buf_IBUF_DS_ODIV2  [get_bd_pins util_ds_buf/IBUF_DS_ODIV2] \
-  [get_bd_pins xdma_0/sys_clk]
-  connect_bd_net -net util_ds_buf_IBUF_OUT  [get_bd_pins util_ds_buf/IBUF_OUT] \
-  [get_bd_pins xdma_0/sys_clk_gt]
-  connect_bd_net -net xdma_0_axi_aclk1  [get_bd_pins xdma_0/axi_aclk] \
-  [get_bd_pins axi_clk]
-  connect_bd_net -net xdma_0_axi_aresetn  [get_bd_pins xdma_0/axi_aresetn] \
-  [get_bd_pins axi_aresetn]
-
-  # Restore current instance
-  current_bd_instance $oldCurInst
-}
 
 # Hierarchical cell: DFX_logic
 proc create_hier_cell_DFX_logic { parentCell nameHier } {
@@ -647,6 +437,22 @@ proc create_root_design { parentCell } {
    CONFIG.ASSOCIATED_BUSIF {mstatic_axi_0:sstatic_axi_0} \
  ] $axi_clk
 
+  # Create instance: xdma_0, and set properties
+  set xdma_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:xdma:4.1 xdma_0 ]
+  set_property -dict [list \
+    CONFIG.PCIE_BOARD_INTERFACE {pci_express_x16} \
+    CONFIG.SYS_RST_N_BOARD_INTERFACE {pcie_perstn} \
+    CONFIG.axilite_master_en {false} \
+    CONFIG.cfg_mgmt_if {false} \
+    CONFIG.pf0_device_id {9032} \
+    CONFIG.xdma_axi_intf_mm {AXI_Memory_Mapped} \
+    CONFIG.xdma_pcie_64bit_en {true} \
+    CONFIG.xdma_pcie_prefetchable {true} \
+    CONFIG.xdma_rnum_chnl {4} \
+    CONFIG.xdma_wnum_chnl {4} \
+  ] $xdma_0
+
+
   # Create instance: axi_smc, and set properties
   set axi_smc [ create_bd_cell -type ip -vlnv xilinx.com:ip:smartconnect:1.0 axi_smc ]
   set_property -dict [list \
@@ -663,6 +469,14 @@ proc create_root_design { parentCell } {
     CONFIG.NUM_MI {1} \
     CONFIG.NUM_SI {1} \
   ] $axi_smc_1
+
+
+  # Create instance: util_ds_buf, and set properties
+  set util_ds_buf [ create_bd_cell -type ip -vlnv xilinx.com:ip:util_ds_buf:2.2 util_ds_buf ]
+  set_property -dict [list \
+    CONFIG.DIFF_CLK_IN_BOARD_INTERFACE {pcie_refclk} \
+    CONFIG.USE_BOARD_FLOW {true} \
+  ] $util_ds_buf
 
 
   # Create instance: DFX_logic
@@ -692,9 +506,6 @@ proc create_root_design { parentCell } {
   # Create instance: rst_ddr4_1_300M1, and set properties
   set rst_ddr4_1_300M1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:proc_sys_reset:5.0 rst_ddr4_1_300M1 ]
 
-  # Create instance: PCIe
-  create_hier_cell_PCIe [current_bd_instance .] PCIe
-
   # Create interface connections
   connect_bd_intf_net -intf_net DFX_logic_m_static_from_sdman [get_bd_intf_ports mstatic_axi_0] [get_bd_intf_pins DFX_logic/m_static_from_sdman]
   connect_bd_intf_net -intf_net DFX_logic_s_static_from_sdman [get_bd_intf_pins DFX_logic/s_static_from_sdman] [get_bd_intf_pins axi_smc/S01_AXI]
@@ -703,14 +514,14 @@ proc create_root_design { parentCell } {
   connect_bd_intf_net -intf_net axi_smc_M04_AXI [get_bd_intf_pins axi_smc_1/S00_AXI] [get_bd_intf_pins axi_smc/M00_AXI]
   connect_bd_intf_net -intf_net ddr4_1_C0_DDR4 [get_bd_intf_ports ddr4_sdram_c1] [get_bd_intf_pins ddr4_1/C0_DDR4]
   connect_bd_intf_net -intf_net default_300mhz_clk1_1 [get_bd_intf_ports default_300mhz_clk1] [get_bd_intf_pins ddr4_1/C0_SYS_CLK]
-  connect_bd_intf_net -intf_net pcie_refclk_1 [get_bd_intf_ports pcie_refclk] [get_bd_intf_pins PCIe/pcie_refclk]
+  connect_bd_intf_net -intf_net pcie_refclk_1 [get_bd_intf_ports pcie_refclk] [get_bd_intf_pins util_ds_buf/CLK_IN_D]
   connect_bd_intf_net -intf_net s_static_to_sdman_0_1 [get_bd_intf_ports sstatic_axi_0] [get_bd_intf_pins DFX_logic/s_static_to_sdman]
   connect_bd_intf_net -intf_net smartconnect_0_M00_AXI [get_bd_intf_pins smartconnect_0/M00_AXI] [get_bd_intf_pins axi_smc/S00_AXI]
   connect_bd_intf_net -intf_net smartconnect_0_M01_AXI [get_bd_intf_pins smartconnect_0/M01_AXI] [get_bd_intf_pins DFX_logic/axi_dfxctrl]
   connect_bd_intf_net -intf_net smartconnect_0_M02_AXI [get_bd_intf_pins smartconnect_0/M02_AXI] [get_bd_intf_pins DFX_logic/axi_gpio_user_aresetn]
   connect_bd_intf_net -intf_net smartconnect_0_M03_AXI [get_bd_intf_pins smartconnect_0/M03_AXI] [get_bd_intf_pins DFX_logic/S_AXI]
-  connect_bd_intf_net -intf_net xdma_0_M_AXI [get_bd_intf_pins PCIe/M_AXI] [get_bd_intf_pins smartconnect_0/S00_AXI]
-  connect_bd_intf_net -intf_net xdma_0_pcie_mgt [get_bd_intf_ports pci_express_x16] [get_bd_intf_pins PCIe/pci_express_x16]
+  connect_bd_intf_net -intf_net xdma_0_M_AXI [get_bd_intf_pins xdma_0/M_AXI] [get_bd_intf_pins smartconnect_0/S00_AXI]
+  connect_bd_intf_net -intf_net xdma_0_pcie_mgt [get_bd_intf_ports pci_express_x16] [get_bd_intf_pins xdma_0/pcie_mgt]
 
   # Create port connections
   connect_bd_net -net DFX_logic_mstatic_aresetn_0  [get_bd_pins DFX_logic/mstatic_aresetn_0] \
@@ -721,19 +532,23 @@ proc create_root_design { parentCell } {
   [get_bd_pins axi_smc_1/aclk1] \
   [get_bd_pins rst_ddr4_1_300M1/slowest_sync_clk]
   connect_bd_net -net pcie_perstn_1  [get_bd_ports pcie_perstn] \
-  [get_bd_pins rst_ddr4_1_300M1/ext_reset_in] \
-  [get_bd_pins PCIe/pcie_perstn]
+  [get_bd_pins xdma_0/sys_rst_n] \
+  [get_bd_pins rst_ddr4_1_300M1/ext_reset_in]
   connect_bd_net -net rst_ddr4_1_300M1_peripheral_reset  [get_bd_pins rst_ddr4_1_300M1/peripheral_reset] \
   [get_bd_pins ddr4_1/sys_rst]
   connect_bd_net -net rst_ddr4_1_300M_peripheral_aresetn  [get_bd_pins rst_ddr4_1_300M/peripheral_aresetn] \
   [get_bd_pins ddr4_1/c0_ddr4_aresetn]
-  connect_bd_net -net xdma_0_axi_aclk1  [get_bd_pins PCIe/axi_clk] \
+  connect_bd_net -net util_ds_buf_IBUF_DS_ODIV2  [get_bd_pins util_ds_buf/IBUF_DS_ODIV2] \
+  [get_bd_pins xdma_0/sys_clk]
+  connect_bd_net -net util_ds_buf_IBUF_OUT  [get_bd_pins util_ds_buf/IBUF_OUT] \
+  [get_bd_pins xdma_0/sys_clk_gt]
+  connect_bd_net -net xdma_0_axi_aclk1  [get_bd_pins xdma_0/axi_aclk] \
   [get_bd_ports axi_clk] \
   [get_bd_pins DFX_logic/axi_clk] \
   [get_bd_pins smartconnect_0/aclk] \
   [get_bd_pins axi_smc/aclk] \
   [get_bd_pins axi_smc_1/aclk]
-  connect_bd_net -net xdma_0_axi_aresetn  [get_bd_pins PCIe/axi_aresetn] \
+  connect_bd_net -net xdma_0_axi_aresetn  [get_bd_pins xdma_0/axi_aresetn] \
   [get_bd_pins axi_smc/aresetn] \
   [get_bd_pins axi_smc_1/aresetn] \
   [get_bd_pins DFX_logic/resetn] \
@@ -741,11 +556,11 @@ proc create_root_design { parentCell } {
   [get_bd_pins rst_ddr4_1_300M/ext_reset_in]
 
   # Create address segments
-  assign_bd_address -offset 0x80000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces PCIe/xdma_0/M_AXI] [get_bd_addr_segs DFX_logic/axi_dfx_control/S_AXI/Reg] -force
-  assign_bd_address -offset 0x40000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces PCIe/xdma_0/M_AXI] [get_bd_addr_segs DFX_logic/axi_gpio_user_logic_aresetn/S_AXI/Reg] -force
-  assign_bd_address -offset 0x001000000000 -range 0x000400000000 -target_address_space [get_bd_addr_spaces PCIe/xdma_0/M_AXI] [get_bd_addr_segs ddr4_1/C0_DDR4_MEMORY_MAP/C0_DDR4_ADDRESS_BLOCK] -force
-  assign_bd_address -offset 0x80200000 -range 0x00100000 -target_address_space [get_bd_addr_spaces PCIe/xdma_0/M_AXI] [get_bd_addr_segs ddr4_1/C0_DDR4_MEMORY_MAP_CTRL/C0_REG] -force
-  assign_bd_address -offset 0x00000000 -range 0x40000000 -with_name SEG_m_static_0_Reg -target_address_space [get_bd_addr_spaces PCIe/xdma_0/M_AXI] [get_bd_addr_segs mstatic_axi_0/Reg] -force
+  assign_bd_address -offset 0x80000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces xdma_0/M_AXI] [get_bd_addr_segs DFX_logic/axi_dfx_control/S_AXI/Reg] -force
+  assign_bd_address -offset 0x40000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces xdma_0/M_AXI] [get_bd_addr_segs DFX_logic/axi_gpio_user_logic_aresetn/S_AXI/Reg] -force
+  assign_bd_address -offset 0x001000000000 -range 0x000400000000 -target_address_space [get_bd_addr_spaces xdma_0/M_AXI] [get_bd_addr_segs ddr4_1/C0_DDR4_MEMORY_MAP/C0_DDR4_ADDRESS_BLOCK] -force
+  assign_bd_address -offset 0x80200000 -range 0x00100000 -target_address_space [get_bd_addr_spaces xdma_0/M_AXI] [get_bd_addr_segs ddr4_1/C0_DDR4_MEMORY_MAP_CTRL/C0_REG] -force
+  assign_bd_address -offset 0x00000000 -range 0x40000000 -with_name SEG_m_static_0_Reg -target_address_space [get_bd_addr_spaces xdma_0/M_AXI] [get_bd_addr_segs mstatic_axi_0/Reg] -force
   assign_bd_address -offset 0x001000000000 -range 0x000400000000 -target_address_space [get_bd_addr_spaces sstatic_axi_0] [get_bd_addr_segs ddr4_1/C0_DDR4_MEMORY_MAP/C0_DDR4_ADDRESS_BLOCK] -force
   assign_bd_address -offset 0x80200000 -range 0x00100000 -target_address_space [get_bd_addr_spaces sstatic_axi_0] [get_bd_addr_segs ddr4_1/C0_DDR4_MEMORY_MAP_CTRL/C0_REG] -force
 
@@ -753,7 +568,6 @@ proc create_root_design { parentCell } {
   # Restore current instance
   current_bd_instance $oldCurInst
 
-  validate_bd_design
   save_bd_design
 }
 # End of create_root_design()
@@ -765,4 +579,6 @@ proc create_root_design { parentCell } {
 
 create_root_design ""
 
+
+common::send_gid_msg -ssname BD::TCL -id 2053 -severity "WARNING" "This Tcl script was generated from a block design that has not been validated. It is possible that design <$design_name> may result in errors during validation."
 

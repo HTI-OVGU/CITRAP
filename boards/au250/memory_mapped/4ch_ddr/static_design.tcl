@@ -18,23 +18,7 @@ variable script_folder
 set script_folder [_tcl::get_script_folder]
 
 ################################################################
-# Check if script is running in correct Vivado version.
-################################################################
-set scripts_vivado_version 2024.2
-set current_vivado_version [version -short]
 
-if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
-   puts ""
-   if { [string compare $scripts_vivado_version $current_vivado_version] > 0 } {
-      catch {common::send_gid_msg -ssname BD::TCL -id 2042 -severity "ERROR" " This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Sourcing the script failed since it was created with a future version of Vivado."}
-
-   } else {
-     catch {common::send_gid_msg -ssname BD::TCL -id 2041 -severity "ERROR" "This script was generated using Vivado <$scripts_vivado_version> and is being run in <$current_vivado_version> of Vivado. Please run the script in Vivado <$scripts_vivado_version> then open the design in Vivado <$current_vivado_version>. Upgrade the design by running \"Tools => Report => Report IP Status...\", then run write_bd_tcl to create an updated script."}
-
-   }
-
-   return 1
-}
 
 ################################################################
 # START
@@ -416,7 +400,14 @@ proc create_hier_cell_DFX_logic { parentCell nameHier } {
   # Create pins
   create_bd_pin -dir I -type clk axi_clk
   create_bd_pin -dir I -type rst resetn
+  create_bd_pin -dir I -from 0 -to 0 probe4
+  create_bd_pin -dir I -from 0 -to 0 sys_rst_n
   create_bd_pin -dir O -from 0 -to 0 mstatic_aresetn_0
+  create_bd_pin -dir I -from 0 -to 0 probe10
+  create_bd_pin -dir I -from 0 -to 0 probe11
+  create_bd_pin -dir I -from 0 -to 0 probe12
+  create_bd_pin -dir I -from 0 -to 0 probe13
+  create_bd_pin -dir I -from 0 -to 0 probe14
 
   # Create instance: dfx_axi_shutdown_man_1, and set properties
   set dfx_axi_shutdown_man_1 [ create_bd_cell -type ip -vlnv xilinx.com:ip:dfx_axi_shutdown_manager:1.0 dfx_axi_shutdown_man_1 ]
@@ -449,7 +440,7 @@ proc create_hier_cell_DFX_logic { parentCell nameHier } {
   set system_ila_0 [ create_bd_cell -type ip -vlnv xilinx.com:ip:system_ila:1.1 system_ila_0 ]
   set_property -dict [list \
     CONFIG.C_MON_TYPE {NATIVE} \
-    CONFIG.C_NUM_OF_PROBES {8} \
+    CONFIG.C_NUM_OF_PROBES {15} \
   ] $system_ila_0
 
 
@@ -499,21 +490,35 @@ proc create_hier_cell_DFX_logic { parentCell nameHier } {
   [get_bd_pins util_vector_logic_1/Op2] \
   [get_bd_pins system_ila_0/probe3]
   connect_bd_net -net dfx_axi_shutdown_man_0_rd_in_shutdown  [get_bd_pins dfx_axi_shutdown_man_0/rd_in_shutdown] \
-  [get_bd_pins system_ila_0/probe6]
+  [get_bd_pins system_ila_0/probe8]
   connect_bd_net -net dfx_axi_shutdown_man_0_shutdown_requested  [get_bd_pins dfx_axi_shutdown_man_0/shutdown_requested] \
   [get_bd_pins util_vector_logic_0/Op2] \
   [get_bd_pins system_ila_0/probe1]
   connect_bd_net -net dfx_axi_shutdown_man_0_wr_in_shutdown  [get_bd_pins dfx_axi_shutdown_man_0/wr_in_shutdown] \
-  [get_bd_pins system_ila_0/probe4]
+  [get_bd_pins system_ila_0/probe6]
   connect_bd_net -net dfx_axi_shutdown_man_1_in_shutdown  [get_bd_pins dfx_axi_shutdown_man_1/in_shutdown] \
   [get_bd_pins util_vector_logic_1/Op1] \
   [get_bd_pins system_ila_0/probe2]
   connect_bd_net -net dfx_axi_shutdown_man_1_rd_in_shutdown  [get_bd_pins dfx_axi_shutdown_man_1/rd_in_shutdown] \
-  [get_bd_pins system_ila_0/probe7]
+  [get_bd_pins system_ila_0/probe9]
   connect_bd_net -net dfx_axi_shutdown_man_1_shutdown_requested  [get_bd_pins dfx_axi_shutdown_man_1/shutdown_requested] \
   [get_bd_pins util_vector_logic_0/Op1] \
   [get_bd_pins system_ila_0/probe0]
   connect_bd_net -net dfx_axi_shutdown_man_1_wr_in_shutdown  [get_bd_pins dfx_axi_shutdown_man_1/wr_in_shutdown] \
+  [get_bd_pins system_ila_0/probe7]
+  connect_bd_net -net probe10_1  [get_bd_pins probe10] \
+  [get_bd_pins system_ila_0/probe10]
+  connect_bd_net -net probe11_1  [get_bd_pins probe11] \
+  [get_bd_pins system_ila_0/probe11]
+  connect_bd_net -net probe12_1  [get_bd_pins probe12] \
+  [get_bd_pins system_ila_0/probe12]
+  connect_bd_net -net probe13_1  [get_bd_pins probe13] \
+  [get_bd_pins system_ila_0/probe13]
+  connect_bd_net -net probe14_1  [get_bd_pins probe14] \
+  [get_bd_pins system_ila_0/probe14]
+  connect_bd_net -net probe4_1  [get_bd_pins probe4] \
+  [get_bd_pins system_ila_0/probe4]
+  connect_bd_net -net sys_rst_n_1  [get_bd_pins sys_rst_n] \
   [get_bd_pins system_ila_0/probe5]
   connect_bd_net -net util_vector_logic_0_Res  [get_bd_pins util_vector_logic_0/Res] \
   [get_bd_pins xlconcat_0/In0]
@@ -791,18 +796,26 @@ proc create_root_design { parentCell } {
   [get_bd_pins rst_ddr4_0_300M/slowest_sync_clk] \
   [get_bd_pins axi_smc/aclk1] \
   [get_bd_pins axi_smc_1/aclk1]
+  connect_bd_net -net ddr4_0_c0_init_calib_complete  [get_bd_pins ddr4_0/c0_init_calib_complete] \
+  [get_bd_pins DFX_logic/probe11]
   connect_bd_net -net ddr4_1_c0_ddr4_ui_clk  [get_bd_pins ddr4_1/c0_ddr4_ui_clk] \
   [get_bd_pins axi_smc/aclk2] \
   [get_bd_pins rst_ddr4_1_300M/slowest_sync_clk] \
   [get_bd_pins axi_smc_1/aclk2]
+  connect_bd_net -net ddr4_1_c0_init_calib_complete  [get_bd_pins ddr4_1/c0_init_calib_complete] \
+  [get_bd_pins DFX_logic/probe12]
   connect_bd_net -net ddr4_2_c0_ddr4_ui_clk  [get_bd_pins ddr4_2/c0_ddr4_ui_clk] \
   [get_bd_pins axi_smc/aclk3] \
   [get_bd_pins rst_ddr4_2_300M/slowest_sync_clk] \
   [get_bd_pins axi_smc_1/aclk3]
+  connect_bd_net -net ddr4_2_c0_init_calib_complete  [get_bd_pins ddr4_2/c0_init_calib_complete] \
+  [get_bd_pins DFX_logic/probe13]
   connect_bd_net -net ddr4_3_c0_ddr4_ui_clk  [get_bd_pins ddr4_3/c0_ddr4_ui_clk] \
   [get_bd_pins axi_smc/aclk4] \
   [get_bd_pins axi_smc_1/aclk4] \
   [get_bd_pins rst_ddr4_3_300M/slowest_sync_clk]
+  connect_bd_net -net ddr4_3_c0_init_calib_complete  [get_bd_pins ddr4_3/c0_init_calib_complete] \
+  [get_bd_pins DFX_logic/probe14]
   connect_bd_net -net pcie_perstn_1  [get_bd_ports pcie_perstn] \
   [get_bd_pins PCIe/pcie_perstn]
   connect_bd_net -net rst_ddr4_0_300M1_peripheral_reset  [get_bd_pins rst_ddr4_0_300M1/peripheral_reset] \
@@ -831,6 +844,8 @@ proc create_root_design { parentCell } {
   [get_bd_pins DFX_logic/resetn] \
   [get_bd_pins smartconnect_0/aresetn] \
   [get_bd_pins rst_ddr4_0_300M1/ext_reset_in]
+  connect_bd_net -net xdma_0_user_lnk_up  [get_bd_pins PCIe/user_lnk_up] \
+  [get_bd_pins DFX_logic/probe10]
 
   # Create address segments
   assign_bd_address -offset 0x80000000 -range 0x00010000 -target_address_space [get_bd_addr_spaces PCIe/xdma_0/M_AXI] [get_bd_addr_segs DFX_logic/axi_dfx_control/S_AXI/Reg] -force
