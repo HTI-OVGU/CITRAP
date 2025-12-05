@@ -18,15 +18,20 @@ ${requdir}/${venvdir}/bin/activate: ${requdir}/requirements.txt
 
 clean:
 	rm -rf ${requdir}/virtualenv
+	rm -rf ${requdir}/citrap
+	rm -rf ${requdir}/citrap_tmp
+	rm -rf ${requdir}/.Xil
 	rm -rf __pycache__
 	find -iname "*.pyc" -delete
+	find -iname "vivado*" -delete
+	find -iname "hs_err_pid*" -delete
 
 
 clean-vivado:
 	python3 clean_vivado.py
 
 clean-all: clean clean-vivado
-	rm -rf citrap citrap_tmp
+	rm -rf ${requdir}/citrap ${requdir}/citrap_tmp
 
 .PHONY: all venv clean clean-vivado clean-all
 
