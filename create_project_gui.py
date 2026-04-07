@@ -25,13 +25,18 @@ class CITRAPProjectGUI:
         
         # Get script directory
         self.script_dir = Path(__file__).parent.resolve()
-        
+        # Get Vivado path
+        vivado_path = os.getenv("XILINX_VIVADO")
+        if vivado_path:
+            print("Vivado path:", vivado_path)
+        else:
+            print("Variable not set")
         # Initialize variables
         self.boards_data = {}
         self.selected_board = tk.StringVar()
         self.selected_design_type = tk.StringVar()
         self.selected_config = tk.StringVar()
-        self.vivado_settings_path = tk.StringVar(value="/tools/Xilinx/Vivado/2024.2/settings64.sh")
+        self.vivado_settings_path = tk.StringVar(value=vivado_path)
         self.jobs_count = tk.IntVar(value=32)
         self.generate_bitstream = tk.BooleanVar(value=False)
         
