@@ -48,10 +48,7 @@ set_property strategy Flow_AreaOptimized_high [get_runs synth_1]
 set_property strategy Area_ExploreSequential [get_runs impl_1]
 
 set_property incremental_checkpoint.directive RuntimeOptimized [get_runs impl_1]
-set_property incremental_checkpoint.directive RuntimeOptimized [get_runs child_0_impl_1]
 set_property AUTO_INCREMENTAL_CHECKPOINT 1 [get_runs impl_1]
 set_property AUTO_INCREMENTAL_CHECKPOINT.DIRECTORY /dummy_path/citrap/citrap.srcs/utils_1/imports/impl_1 [get_runs impl_1]
-set_property AUTO_INCREMENTAL_CHECKPOINT 1 [get_runs child_0_impl_1]
-set_property AUTO_INCREMENTAL_CHECKPOINT.DIRECTORY /dummy_path/citrap/citrap.srcs/utils_1/imports/child_0_impl_1 [get_runs child_0_impl_1]
 
 
